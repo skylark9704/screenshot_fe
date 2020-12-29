@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import CanvasDraw from "react-canvas-draw";
-import * as h2c from "html2canvas";
-import { dataURItoBlob, downloadBlob } from "./helpers";
+import axios from "axios";
+import { encode } from "js-base64";
 
 function DoodleCanvas(props) {
   const { onSave, onClose } = props;
@@ -11,7 +11,7 @@ function DoodleCanvas(props) {
     blue: "blue",
     green: "green",
     black: "black",
-    transparent: 'transparent'
+    transparent: "transparent",
   };
 
   const [brushColor, setBrushColor] = useState(colors.black);
@@ -25,7 +25,7 @@ function DoodleCanvas(props) {
     endY: 0,
   });
 
-  const [rectangle, setRectangle] = useState([]) 
+  const [rectangle, setRectangle] = useState([]);
 
   useEffect(() => {
     const { current } = ref;
@@ -42,7 +42,7 @@ function DoodleCanvas(props) {
 
   const onMouseDown = (event) => {
     if (rectangle.length > 0) {
-      clearRectangle()
+      clearRectangle();
     }
     const newCoords = { ...coords, startX: event.x, startY: event.y };
     setCoords(newCoords);
@@ -60,45 +60,90 @@ function DoodleCanvas(props) {
         newCoords.endY - newCoords.startY
       );
       ctx.stroke();
-      setRectangle([{
-        x:newCoords.startX,
-        y:newCoords.startY,
-        w:newCoords.endX - newCoords.startX,
-        h:newCoords.endY - newCoords.startY
-      }])
+      setRectangle([
+        {
+          x: newCoords.startX,
+          y: newCoords.startY,
+          w: newCoords.endX - newCoords.startX,
+          h: newCoords.endY - newCoords.startY,
+        },
+      ]);
     }
   };
 
   const clearRectangle = () => {
     const ctx = ref.current.canvas.interface.getContext("2d");
-    ctx.clearRect(0,0,ref.current.canvas.interface.width,ref.current.canvas.interface.height)
-  }
+    ctx.clearRect(
+      0,
+      0,
+      ref.current.canvas.interface.width,
+      ref.current.canvas.interface.height
+    );
+  };
 
   const toggleDrawMode = () => {
     if (isDrawDisabled) {
       ref.current.canvas.interface.style.cursor = "crosshair";
-      setBrushColor(colors.transparent)
-    }
-    else {
-      ref.current.canvas.interface.style.cursor = "auto"; 
-      setRectangle([])
-      setBrushColor(colors.green)
+      setBrushColor(colors.transparent);
+    } else {
+      ref.current.canvas.interface.style.cursor = "auto";
+      setRectangle([]);
+      setBrushColor(colors.green);
     }
     setIsDrawDisabled(!isDrawDisabled);
   };
 
-  const saveData = async () => {
+  const saveData = async (data) => {
     const canvas = document.getElementById("canvas-editor");
-
-    const image = await h2c(canvas, {
-      ignoreElements: (element) => {
-        if (element.id === "canvas-controls") {
-          return true;
-        }
-      },
+    console.log(ref.current.getSaveData());
+    const dup = document.documentElement.cloneNode(true);
+    dup.querySelectorAll("script").forEach((script) => {
+      script.parentNode.removeChild(script);
     });
-    const blob = dataURItoBlob(image.toDataURL());
-    downloadBlob(blob, "image.png");
+    dup.querySelectorAll("#canvas-controls").forEach((controls) => {
+      controls.parentNode.removeChild(controls);
+    });
+
+    const html = encode(dup.innerHTML);
+
+    const dimensions = {
+      viewport: {
+        w: document.documentElement.clientWidth,
+        h: document.documentElement.clientHeight,
+      },
+      page: {
+        w: document.getElementsByTagName("body")[0].scrollWidth,
+        h: document.getElementsByTagName("body")[0].scrollHeight,
+      },
+    };
+
+    const elems = document.querySelectorAll("body *");
+    const scrollPositions = [];
+    elems.forEach((elem) => {
+      scrollPositions.push({ top: elem.scrollTop, left: elem.scrollLeft });
+    });
+
+    const scroll = {
+      window: {
+        v: window.pageYOffset,
+        h: window.pageXOffset,
+      },
+      elements: scrollPositions,
+    };
+
+    const requestData = {
+      html,
+      scroll,
+      dimensions,
+      origin: window.location.origin,
+    };
+    axios
+      .post("http://localhost:8000/screenshot", requestData)
+      .then((res) => {
+        console.log(res.data);
+      })
+      .catch((err) => console.log(err));
+
     onClose();
   };
 
@@ -129,11 +174,7 @@ function DoodleCanvas(props) {
             onClick={clearCanvas}
             width="36px"
           />
-          <img
-            src="https://www.svgrepo.com/show/177793/error-close.svg"
-            onClick={toggleDrawMode}
-            width="36px"
-          />
+          <img src={"marquee.svg"} onClick={toggleDrawMode} width="36px" />
           <img
             src="https://www.svgrepo.com/show/177793/error-close.svg"
             onClick={closeCanvas}
@@ -170,6 +211,7 @@ function DoodleCanvas(props) {
         </div>
       </div>
       <CanvasDraw
+        imgSrc={"transparent"}
         hideGrid={true}
         brushColor={brushColor}
         hideInterface={true}

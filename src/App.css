@@ -17,7 +17,11 @@
   position: fixed;
   top: 0;
   left: 0;
-  background-color: silver;
+  background-color: transparent;
+}
+
+.canvas-editor > div:not(#canvas-controls) {
+  background-color: transparent !important;
 }
 
 .canvas-controls-container {
